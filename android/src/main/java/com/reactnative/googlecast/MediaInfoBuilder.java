@@ -61,31 +61,36 @@ public class MediaInfoBuilder {
             };
 
     public static @NonNull MediaInfo buildMediaInfo(@NonNull ReadableMap parameters) {
-        MediaMetadata movieMetadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE);
+        // custom mediaType: default is MOVIE
+        Integer mediaType = ReadableMapUtils.getInt(parameters, "mediaType");
+        if (mediaType == null) {
+            mediaType = MediaMetadata.MEDIA_TYPE_MOVIE;
+        }
+        MediaMetadata mediaMetadata = new MediaMetadata(mediaType);
 
         String title = ReadableMapUtils.getString(parameters, "title");
         if (title != null) {
-            movieMetadata.putString(MediaMetadata.KEY_TITLE, title);
+            mediaMetadata.putString(MediaMetadata.KEY_TITLE, title);
         }
 
         String subtitle = ReadableMapUtils.getString(parameters, "subtitle");
         if (subtitle != null) {
-            movieMetadata.putString(MediaMetadata.KEY_SUBTITLE, subtitle);
+            mediaMetadata.putString(MediaMetadata.KEY_SUBTITLE, subtitle);
         }
 
         String studio = ReadableMapUtils.getString(parameters, "studio");
         if (studio != null) {
-            movieMetadata.putString(MediaMetadata.KEY_STUDIO, studio);
+            mediaMetadata.putString(MediaMetadata.KEY_STUDIO, studio);
         }
 
         String imageUrl = ReadableMapUtils.getString(parameters, "imageUrl");
         if (imageUrl != null) {
-            movieMetadata.addImage(new WebImage(Uri.parse(imageUrl)));
+            mediaMetadata.addImage(new WebImage(Uri.parse(imageUrl)));
         }
 
         String posterUrl = ReadableMapUtils.getString(parameters, "posterUrl");
         if (posterUrl != null) {
-            movieMetadata.addImage(new WebImage(Uri.parse(posterUrl)));
+            mediaMetadata.addImage(new WebImage(Uri.parse(posterUrl)));
         }
 
         String mediaUrl = ReadableMapUtils.getString(parameters, "mediaUrl");
@@ -99,10 +104,24 @@ public class MediaInfoBuilder {
                         ? MediaInfo.STREAM_TYPE_LIVE
                         : MediaInfo.STREAM_TYPE_BUFFERED;
 
+        // The section duration in milliseconds.
+        Integer sectionDuration = ReadableMapUtils.getInt(parameters, "sectionDuration");
+        if (sectionDuration != null) {
+            mediaMetadata.putTimeMillis(MediaMetadata.KEY_SECTION_DURATION, sectionDuration);
+        }
+
+        // For live content, this field can be used to specify the absolute section start time.
+        // The value is in Epoch time in milliseconds.
+        Double sectionStartAbsoluteTime = ReadableMapUtils.getDouble(parameters, "sectionStartAbsoluteTime");
+        if (sectionStartAbsoluteTime != null) {
+            // ReadableMap does not support long yet, use workaround with double
+            mediaMetadata.putTimeMillis(MediaMetadata.KEY_SECTION_START_ABSOLUTE_TIME, (long) value);
+        }
+
         MediaInfo.Builder builder =
                 new MediaInfo.Builder(mediaUrl)
                         .setStreamType(streamType)
-                        .setMetadata(movieMetadata);
+                        .setMetadata(mediaMetadata);
 
         String contentType = ReadableMapUtils.getString(parameters, "contentType");
         builder = builder.setContentType(contentType != null ? contentType : DEFAULT_CONTENT_TYPE);
