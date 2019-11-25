@@ -13,16 +13,22 @@ public class ReadableMapUtils {
         if (!map.hasKey(key)) {
             return null;
         }
-
-        return map.getString(key);
+        try {
+            return map.getString(key);
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable ReadableMap getReadableMap(@NonNull ReadableMap map, @NonNull String key) {
         if (!map.hasKey(key)) {
             return null;
         }
-
-        return map.getMap(key);
+        try {
+            return map.getMap(key);
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable Map<?, ?> getMap(@NonNull ReadableMap map, @NonNull String key) {
@@ -30,8 +36,11 @@ public class ReadableMapUtils {
         if (innerMap == null) {
             return null;
         }
-
-        return innerMap.toHashMap();
+        try {
+            return innerMap.toHashMap();
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable Integer getInt(@NonNull ReadableMap map, @NonNull String key) {
@@ -39,15 +48,24 @@ public class ReadableMapUtils {
             return null;
         }
 
-        return map.getInt(key);
+        try {
+            return map.getInt(key);
+        }
+        catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable Double getDouble(@NonNull ReadableMap map, @NonNull String key) {
         if (!map.hasKey(key)) {
             return null;
         }
-
-        return map.getDouble(key);
+        try {
+            return map.getDouble(key);
+        }
+        catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable Float getFloat(@NonNull ReadableMap map, @NonNull String key) {
@@ -59,8 +77,12 @@ public class ReadableMapUtils {
         if (!map.hasKey(key)) {
             return null;
         }
-
-        return map.getBoolean(key);
+        try {
+            return map.getBoolean(key);
+        }
+        catch (Exception ignore) {
+            return null;
+        }
     }
 
     public static @Nullable Integer getColor(@NonNull ReadableMap map, @NonNull String key) {
@@ -68,7 +90,11 @@ public class ReadableMapUtils {
         if (colorString == null) {
             return null;
         }
-
-        return Color.parseColor(colorString);
+        try {
+            return Color.parseColor(colorString);
+        }
+        catch (Exception ignore) {
+            return null;
+        }
     }
 }
