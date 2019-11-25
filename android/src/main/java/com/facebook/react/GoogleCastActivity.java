@@ -11,15 +11,13 @@ package com.facebook.react;
 
 import android.content.Intent;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
-
-import android.util.Log;
+import android.support.v7.app.AppCompatActivity;
 import android.view.KeyEvent;
 
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler;
 import com.facebook.react.modules.core.PermissionAwareActivity;
 import com.facebook.react.modules.core.PermissionListener;
-import com.google.android.gms.cast.framework.CastContext;
+import com.reactnative.googlecast.GoogleCastModule;
 
 import javax.annotation.Nullable;
 
@@ -30,8 +28,6 @@ public abstract class GoogleCastActivity extends AppCompatActivity
     implements DefaultHardwareBackBtnHandler, PermissionAwareActivity {
 
   private final ReactActivityDelegate mDelegate;
-
-  private final static String TAG = "GoogleCastActivity";
 
   protected GoogleCastActivity() { mDelegate = createReactActivityDelegate(); }
 
@@ -54,13 +50,8 @@ public abstract class GoogleCastActivity extends AppCompatActivity
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     mDelegate.onCreate(savedInstanceState);
-    try {
-      // lazy load Google Cast context
-      CastContext.getSharedInstance(this);
-    } catch (Exception e) {
-      // Cast not available
-      Log.w(TAG, e.getMessage());
-    }
+    // lazy load Google Cast context
+    GoogleCastModule.initializeCast(this);
   }
 
   @Override

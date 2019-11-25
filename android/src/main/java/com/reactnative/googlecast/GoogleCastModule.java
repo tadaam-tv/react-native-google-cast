@@ -1,9 +1,9 @@
 package com.reactnative.googlecast;
 
+import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.facebook.react.bridge.Arguments;
@@ -19,8 +19,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.google.android.gms.cast.Cast;
 import com.google.android.gms.cast.CastDevice;
 import com.google.android.gms.cast.MediaInfo;
-import com.google.android.gms.cast.MediaLoadRequestData;
-import com.google.android.gms.cast.MediaMetadata;
+import com.google.android.gms.cast.MediaStatus;
+import com.google.android.gms.cast.MediaTrack;
 import com.google.android.gms.cast.framework.CastContext;
 import com.google.android.gms.cast.framework.CastSession;
 import com.google.android.gms.cast.framework.SessionManager;
@@ -29,10 +29,12 @@ import com.google.android.gms.cast.framework.media.RemoteMediaClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.images.WebImage;
+import com.reactnative.googlecast.GoogleCastButtonManager;
 
-import org.json.JSONObject;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class GoogleCastModule
@@ -63,13 +65,25 @@ public class GoogleCastModule
 
     protected static final  String CHANNEL_MESSAGE_RECEIVED = "GoogleCast:ChannelMessageReceived";
 
+    protected static final String E_CAST_NOT_AVAILABLE = "E_CAST_NOT_AVAILABLE";
+    protected static final String GOOGLE_CAST_NOT_AVAILABLE_MESSAGE = "Google Cast not available";
+    protected static final String DEFAULT_SUBTITLES_LANGUAGE = Locale.ENGLISH.getLanguage();
+
     private CastSession mCastSession;
     private SessionManagerListener<CastSession> mSessionManagerListener;
 
+    /*
+    'CAST_AVAILABLE' is volatile because 'initializeCast' is called on the main thread, but
+    react-native modules may be initialized on any thread.
+    */
+    private static volatile boolean CAST_AVAILABLE = true;
+
     public GoogleCastModule(ReactApplicationContext reactContext) {
         super(reactContext);
-        reactContext.addLifecycleEventListener(this);
-        setupCastListener();
+        if (CAST_AVAILABLE) {
+            reactContext.addLifecycleEventListener(this);
+            setupCastListener();
+        }
     }
 
     @Override
@@ -95,6 +109,8 @@ public class GoogleCastModule
         constants.put("MEDIA_PLAYBACK_ENDED", MEDIA_PLAYBACK_ENDED);
         constants.put("MEDIA_PROGRESS_UPDATED", MEDIA_PROGRESS_UPDATED);
 
+        constants.put("CAST_AVAILABLE", CAST_AVAILABLE);
+
         constants.put("CHANNEL_MESSAGE_RECEIVED", CHANNEL_MESSAGE_RECEIVED);
         return constants;
     }
@@ -107,6 +123,17 @@ public class GoogleCastModule
     }
 
     @ReactMethod
+    public void showCastPicker() {
+        getReactApplicationContext().runOnUiQueueThread(new Runnable() {
+            @Override
+            public void run() {
+                GoogleCastButtonManager.getGoogleCastButtonManagerInstance().performClick();
+                Log.e(REACT_CLASS, "showCastPicker... ");
+            }
+        });
+    }
+
+    @ReactMethod
     public void castMedia(final ReadableMap params) {
         if (mCastSession == null) {
             return;
@@ -115,112 +142,33 @@ public class GoogleCastModule
         getReactApplicationContext().runOnUiQueueThread(new Runnable() {
             @Override
             public void run() {
-                RemoteMediaClient remoteMediaClient =
-                        mCastSession.getRemoteMediaClient();
+                RemoteMediaClient remoteMediaClient = mCastSession.getRemoteMediaClient();
                 if (remoteMediaClient == null) {
                     return;
                 }
 
                 Integer seconds = null;
                 if (params.hasKey("playPosition")) {
-                    try {
-                        seconds = params.getInt("playPosition");
-                    } catch (Exception ignore) {}
+                    seconds = params.getInt("playPosition");
+                }
+                if (seconds == null) {
+                    seconds = 0;
                 }
 
-                MediaLoadRequestData.Builder builder = new MediaLoadRequestData.Builder();
-                builder
-                        .setAutoplay(true)
-                        .setMediaInfo(buildMediaInfo(params));
-
-                if (seconds != null) {
-                    builder.setCurrentTime(seconds * 1000);
-                }
-                remoteMediaClient.load(builder.build());
+                MediaInfo mediaInfo = MediaInfoBuilder.buildMediaInfo(params);
+                remoteMediaClient.load(mediaInfo, true, seconds * 1000);
 
                 Log.e(REACT_CLASS, "Casting media... ");
             }
         });
     }
 
-    private MediaInfo buildMediaInfo(ReadableMap params) {
-
-        int mediaType = MediaMetadata.MEDIA_TYPE_MOVIE;
-        if (params.hasKey("mediaType")) {
-            mediaType = params.getInt("mediaType");
+    public static void initializeCast(Context context){
+        try {
+            CastContext.getSharedInstance(context);
+        } catch(RuntimeException e) {
+            CAST_AVAILABLE = false;
         }
-
-        MediaMetadata metaData = new MediaMetadata(mediaType);
-
-        if (params.hasKey("title") && params.getString("title") != null) {
-            metaData.putString(MediaMetadata.KEY_TITLE,
-                    params.getString("title"));
-        }
-
-        if (params.hasKey("subtitle") && params.getString("subtitle") != null) {
-            metaData.putString(MediaMetadata.KEY_SUBTITLE,
-                    params.getString("subtitle"));
-        }
-
-        if (params.hasKey("studio") && params.getString("studio") != null) {
-            metaData.putString(MediaMetadata.KEY_STUDIO,
-                    params.getString("studio"));
-        }
-
-        if (params.hasKey("imageUrl") && params.getString("imageUrl") != null) {
-            metaData.addImage(
-                    new WebImage(Uri.parse(params.getString("imageUrl"))));
-        }
-
-        if (params.hasKey("posterUrl") && params.getString("posterUrl") != null) {
-            metaData.addImage(
-                    new WebImage(Uri.parse(params.getString("posterUrl"))));
-        }
-
-        // The section duration in milliseconds.
-        if (params.hasKey("sectionDuration")) {
-            try {
-                int value = params.getInt("sectionDuration");
-                metaData.putTimeMillis(MediaMetadata.KEY_SECTION_DURATION, value);
-            } catch (Exception ignore) {}
-        }
-
-        // For live content, this field can be used to specify the absolute section start time.
-        // The value is in Epoch time in milliseconds.
-        if (params.hasKey("sectionStartAbsoluteTime")) {
-            try {
-                // ReadableMap does not support long yet, use workaround
-                long value = (long) params.getDouble("sectionStartAbsoluteTime");
-                metaData.putTimeMillis(MediaMetadata.KEY_SECTION_START_ABSOLUTE_TIME, value);
-            } catch (Exception ignore) {}
-        }
-
-
-        int streamType = MediaInfo.STREAM_TYPE_BUFFERED;
-        if (params.hasKey("streamType")) {
-            streamType = params.getInt("streamType");
-        }
-        MediaInfo.Builder builder =
-                new MediaInfo.Builder(params.getString("mediaUrl"))
-                        .setStreamType(streamType)
-                        .setMetadata(metaData);
-
-        if (params.hasKey("contentType") &&
-                params.getString("contentType") != null) {
-            builder = builder.setContentType(params.getString("contentType"));
-        } else {
-            builder = builder.setContentType("video/mp4");
-        }
-
-        if (params.hasKey("customData") && params.getMap("customData") != null) {
-            builder = builder.setCustomData(new JSONObject(params.getMap("customData").toHashMap()));
-        }
-
-        if (params.hasKey("streamDuration")) {
-            builder = builder.setStreamDuration(params.getInt("streamDuration"));
-        }
-
-        return builder.build();
     }
 
     @ReactMethod
@@ -248,12 +196,12 @@ public class GoogleCastModule
         getReactApplicationContext().runOnUiQueueThread(new Runnable() {
             @Override
             public void run() {
-                try {
+                if (CAST_AVAILABLE) {
                     CastContext castContext =
-                            CastContext.getSharedInstance(getReactApplicationContext());
+                        CastContext.getSharedInstance(getReactApplicationContext());
                     promise.resolve(castContext.getCastState() - 1);
-                } catch (Exception e) {
-                    promise.reject(e);
+                } else {
+                    promise.reject(E_CAST_NOT_AVAILABLE, GOOGLE_CAST_NOT_AVAILABLE_MESSAGE);
                 }
             }
         });
@@ -320,7 +268,12 @@ public class GoogleCastModule
             getReactApplicationContext().runOnUiQueueThread(new Runnable() {
                 @Override
                 public void run() {
-                    mCastSession.getRemoteMediaClient().play();
+                    RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                    if (client == null) {
+                        return;
+                    }
+
+                    client.play();
                 }
             });
         }
@@ -332,7 +285,12 @@ public class GoogleCastModule
             getReactApplicationContext().runOnUiQueueThread(new Runnable() {
                 @Override
                 public void run() {
-                    mCastSession.getRemoteMediaClient().pause();
+                    RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                    if (client == null) {
+                        return;
+                    }
+
+                    client.pause();
                 }
             });
         }
@@ -344,7 +302,12 @@ public class GoogleCastModule
             getReactApplicationContext().runOnUiQueueThread(new Runnable() {
                 @Override
                 public void run() {
-                    mCastSession.getRemoteMediaClient().stop();
+                    RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                    if (client == null) {
+                        return;
+                    }
+
+                    client.stop();
                 }
             });
         }
@@ -356,7 +319,29 @@ public class GoogleCastModule
             getReactApplicationContext().runOnUiQueueThread(new Runnable() {
                 @Override
                 public void run() {
-                    mCastSession.getRemoteMediaClient().seek(position * 1000);
+                    RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                    if (client == null) {
+                        return;
+                    }
+
+                    client.seek(position * 1000);
+                }
+            });
+        }
+    }
+
+    @ReactMethod
+    public void setVolume(final double volume) {
+        if (mCastSession != null) {
+            getReactApplicationContext().runOnUiQueueThread(new Runnable() {
+                @Override
+                public void run() {
+                  RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                  if (client == null) {
+                    return;
+                  }
+
+                  client.setStreamVolume(volume);
                 }
             });
         }
@@ -367,14 +352,14 @@ public class GoogleCastModule
         getReactApplicationContext().runOnUiQueueThread(new Runnable() {
             @Override
             public void run() {
-                try {
+                if (CAST_AVAILABLE) {
                     SessionManager sessionManager =
-                            CastContext.getSharedInstance(getReactApplicationContext())
-                                    .getSessionManager();
+                        CastContext.getSharedInstance(getReactApplicationContext())
+                                .getSessionManager();
                     sessionManager.endCurrentSession(stopCasting);
                     promise.resolve(true);
-                } catch (Exception e) {
-                    promise.reject(e);
+                } else {
+                    promise.reject(E_CAST_NOT_AVAILABLE, GOOGLE_CAST_NOT_AVAILABLE_MESSAGE);
                 }
             }
         });
@@ -382,11 +367,69 @@ public class GoogleCastModule
 
     @ReactMethod
     public void launchExpandedControls() {
-        ReactApplicationContext context = getReactApplicationContext();
-        Intent intent =
-                new Intent(context, GoogleCastExpandedControlsActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(intent);
+        if (CAST_AVAILABLE) {
+            ReactApplicationContext context = getReactApplicationContext();
+            Intent intent = new Intent(context, GoogleCastExpandedControlsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } else {
+            Log.i(REACT_CLASS, "Error :> " + GOOGLE_CAST_NOT_AVAILABLE_MESSAGE);
+        }
+
+    }
+
+    @ReactMethod
+    public void toggleSubtitles(final boolean enabled, final String languageCode) {
+        if (mCastSession == null) {
+            return;
+        }
+
+        getReactApplicationContext().runOnUiQueueThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mCastSession == null) {
+                    return;
+                }
+
+                RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+                if (client == null) {
+                    return;
+                }
+
+                if (!enabled) {
+                    client.setActiveMediaTracks(new long[] {});
+                    return;
+                }
+
+                MediaInfo mediaInfo = client.getMediaInfo();
+                if (mediaInfo == null) {
+                    return;
+                }
+
+
+                List<MediaTrack> tracks = mediaInfo.getMediaTracks();
+                if (tracks == null || tracks.isEmpty()) {
+                    return;
+                }
+
+                String languageToSelect = languageCode != null ? languageCode : DEFAULT_SUBTITLES_LANGUAGE;
+                for (MediaTrack track : tracks) {
+                    if (
+                        track != null &&
+                        track.getType() == MediaTrack.TYPE_TEXT &&
+                        (
+                            track.getSubtype() == MediaTrack.SUBTYPE_NONE || // Sometimes not provided.
+                            track.getSubtype() == MediaTrack.SUBTYPE_SUBTITLES ||
+                            track.getSubtype() == MediaTrack.SUBTYPE_CAPTIONS
+                        ) &&
+                        track.getLanguage().equals(languageToSelect)
+                    ) {
+                        client.setActiveMediaTracks(new long[]{ track.getId() });
+                        return;
+                    }
+                }
+            }
+        });
     }
 
     private void setupCastListener() {
@@ -398,14 +441,11 @@ public class GoogleCastModule
         getReactApplicationContext().runOnUiQueueThread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    SessionManager sessionManager =
-                            CastContext.getSharedInstance(getReactApplicationContext())
-                                    .getSessionManager();
-                    sessionManager.addSessionManagerListener(mSessionManagerListener,
-                            CastSession.class);
-                } catch (Exception ignore) {
-                }
+                SessionManager sessionManager =
+                        CastContext.getSharedInstance(getReactApplicationContext())
+                                .getSessionManager();
+                sessionManager.addSessionManagerListener(mSessionManagerListener,
+                        CastSession.class);
             }
         });
     }
@@ -415,14 +455,11 @@ public class GoogleCastModule
         getReactApplicationContext().runOnUiQueueThread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    SessionManager sessionManager =
-                            CastContext.getSharedInstance(getReactApplicationContext())
-                                    .getSessionManager();
-                    sessionManager.removeSessionManagerListener(mSessionManagerListener,
-                            CastSession.class);
-                } catch (Exception ignore) {
-                }
+                SessionManager sessionManager =
+                        CastContext.getSharedInstance(getReactApplicationContext())
+                                .getSessionManager();
+                sessionManager.removeSessionManagerListener(mSessionManagerListener,
+                        CastSession.class);
             }
         });
     }
@@ -431,15 +468,28 @@ public class GoogleCastModule
     public void onHostDestroy() {
     }
 
-    void setCastSession(CastSession castSession) {
+    protected void setCastSession(CastSession castSession) {
         this.mCastSession = castSession;
     }
 
-    CastSession getCastSession() {
+    protected CastSession getCastSession() {
         return mCastSession;
     }
 
-    void runOnUiQueueThread(Runnable runnable) {
+    protected @Nullable MediaStatus getMediaStatus() {
+        if (mCastSession == null) {
+            return null;
+        }
+
+        RemoteMediaClient client = mCastSession.getRemoteMediaClient();
+        if (client == null) {
+            return null;
+        }
+
+        return client.getMediaStatus();
+    }
+
+    protected void runOnUiQueueThread(Runnable runnable) {
         getReactApplicationContext().runOnUiQueueThread(runnable);
     }
 }
