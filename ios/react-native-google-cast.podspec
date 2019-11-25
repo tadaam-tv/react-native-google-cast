@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.platform      = :ios, '9.0'
 
   s.source        = { :git => 'https://github.com/tadaam-tv/react-native-google-cast.git', :tag => s.version.to_s }
-  s.source_files  = 'RNGoogleCast/**/*.{h,m}'
+  s.source_files  = 'ios/RNGoogleCast/**/*.{h,m}'
   s.default_subspec = 'Default'
 
   s.dependency      'React'
