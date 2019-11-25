@@ -1,7 +1,7 @@
 package com.reactnative.googlecast;
 
 import android.net.Uri;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import com.facebook.react.bridge.ReadableMap;
 import com.google.android.gms.cast.MediaInfo;
@@ -60,7 +60,8 @@ public class MediaInfoBuilder {
                 }
             };
 
-    public static @NonNull MediaInfo buildMediaInfo(@NonNull ReadableMap parameters) {
+    public static @NonNull
+    MediaInfo buildMediaInfo(@NonNull ReadableMap parameters) {
         // custom mediaType: default is MOVIE
         Integer mediaType = ReadableMapUtils.getInt(parameters, "mediaType");
         if (mediaType == null) {
@@ -115,7 +116,7 @@ public class MediaInfoBuilder {
         Double sectionStartAbsoluteTime = ReadableMapUtils.getDouble(parameters, "sectionStartAbsoluteTime");
         if (sectionStartAbsoluteTime != null) {
             // ReadableMap does not support long yet, use workaround with double
-            mediaMetadata.putTimeMillis(MediaMetadata.KEY_SECTION_START_ABSOLUTE_TIME, (long) value);
+            mediaMetadata.putTimeMillis(MediaMetadata.KEY_SECTION_START_ABSOLUTE_TIME, sectionStartAbsoluteTime.longValue());
         }
 
         MediaInfo.Builder builder =
