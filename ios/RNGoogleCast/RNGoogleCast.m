@@ -211,8 +211,8 @@ RCT_EXPORT_METHOD(castMedia: (NSDictionary *)params
     if (!contentType) {
         contentType = @"video/mp4";
     }
-    [metadata setDouble:sectionDuration forKey:kGCKMetadataKeySectionDuration];
-    [metadata setDouble:sectionStartAbsoluteTime forKey:kGCKMetadataKeySectionStartAbsoluteTime];
+    [metadata setDouble:sectionDuration/1000 forKey:kGCKMetadataKeySectionDuration];
+    [metadata setDouble:sectionStartAbsoluteTime/1000 forKey:kGCKMetadataKeySectionStartAbsoluteTime];
     
     [metadata addImage:[[GCKImage alloc]
                         initWithURL:[[NSURL alloc] initWithString:imageUrl]
